@@ -289,9 +289,9 @@ export async function loginUser(email, password) {
 
     const sessionUser = {
       id: u?.id || 'usr-1',
-      name: u?.name || 'Ramesh Sharma',
+      name: u?.name || 'Bhawesh Panwar',
       email: u?.email || email,
-      business_name: u?.business_name || "Sharma's Furniture",
+      business_name: u?.business_name || 'ExpenseLens',
       role: u?.role || 'Owner',
     };
 

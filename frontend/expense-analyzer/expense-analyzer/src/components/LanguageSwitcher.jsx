@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Globe } from 'lucide-react';
 
 const languages = [
   { code: 'en', label: 'English' },
@@ -76,9 +76,7 @@ export default function LanguageSwitcher({ variant = 'dropdown' }) {
         aria-label="Select language"
         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--color-line)] text-xs font-medium text-[var(--color-ink)] bg-[var(--color-surface)] hover:bg-[var(--color-line-soft)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/30"
       >
-        <span role="img" aria-label="globe" className="text-sm leading-none">
-          🌐
-        </span>
+        <Globe size={13} className="text-[var(--color-ink-soft)]" />
         <span>{currentLang === 'hi' ? 'हिन्दी' : 'English'}</span>
         <ChevronDown
           size={12}

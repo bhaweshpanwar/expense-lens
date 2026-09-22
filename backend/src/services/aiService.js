@@ -1,5 +1,5 @@
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
 const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b';
 const NVIDIA_VISION_MODEL = process.env.NVIDIA_VISION_MODEL || 'meta/llama-3.2-11b-vision-instruct';
 

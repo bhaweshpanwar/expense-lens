@@ -52,11 +52,24 @@ export function ExpenseProvider({ children }) {
     }
   }, []);
 
+  const refreshExpenses = useCallback(async () => {
+    try {
+      const [expenseData, budgetData] = await Promise.all([fetchExpenses(), fetchBudget()]);
+      setExpenses(expenseData);
+      if (budgetData?.monthlyBudget !== undefined) {
+        setMonthlyBudget(budgetData.monthlyBudget);
+      }
+    } catch (err) {
+      console.error('Failed to refresh expenses', err);
+    }
+  }, []);
+
   const value = {
     expenses,
     monthlyBudget,
     setMonthlyBudget,
     updateBudget,
+    refreshExpenses,
     isLoading,
     addExpense,
     editExpense,

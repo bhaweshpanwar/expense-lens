@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Hammer, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 
@@ -69,18 +69,10 @@ export default function Login() {
 
       <div className="w-full max-w-md">
         {/* Brand Mark */}
-        <div className="flex items-center justify-center gap-2.5 mb-6">
-          <div className="w-9 h-9 rounded-md bg-[var(--color-amber)] flex items-center justify-center shrink-0 shadow-xs">
-            <Hammer size={18} className="text-[var(--color-brand-dark)]" />
-          </div>
-          <div className="leading-tight">
-            <p className="text-base font-semibold tracking-tight text-[var(--color-ink)]">
-              {t('brandTitle')}
-            </p>
-            <p className="text-[11px] font-medium text-[var(--color-ink-soft)]">
-              {t('brandSubtitle')}
-            </p>
-          </div>
+        <div className="flex items-center justify-center mb-6">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-ink)]">
+            ExpenseLens
+          </h1>
         </div>
 
         {/* Card */}

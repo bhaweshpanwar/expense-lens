@@ -7,7 +7,6 @@ import {
   LineChart,
   ShieldAlert,
   Sparkles,
-  Hammer,
 } from 'lucide-react';
 
 const navItems = [
@@ -28,14 +27,8 @@ export default function Sidebar({ isOpen, onNavigate }) {
         transition-transform duration-200 lg:translate-x-0 lg:static lg:z-auto
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
-      <div className="flex items-center gap-2 px-5 h-16 border-b border-white/10">
-        <div className="w-8 h-8 rounded-md bg-[var(--color-amber)] flex items-center justify-center shrink-0">
-          <Hammer size={16} className="text-[var(--color-brand-dark)]" />
-        </div>
-        <div className="leading-tight">
-          <p className="text-sm font-semibold tracking-tight">{t('brandTitle')}</p>
-          <p className="text-[11px] text-white/60">{t('brandSubtitle')}</p>
-        </div>
+      <div className="flex items-center px-5 h-16 border-b border-white/10">
+        <span className="text-base font-bold tracking-wide text-white">ExpenseLens</span>
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
@@ -58,12 +51,6 @@ export default function Sidebar({ isOpen, onNavigate }) {
           </NavLink>
         ))}
       </nav>
-
-      <div className="px-5 py-4 border-t border-white/10 text-[11px] text-white/45">
-        {t('common.version')}
-        <br />
-        {t('common.preview')}
-      </div>
     </aside>
   );
 }
