@@ -1,17 +1,92 @@
+require('dotenv').config({ override: true });
+
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b';
-const NVIDIA_VISION_MODEL = process.env.NVIDIA_VISION_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+
+function getNvidiaApiKey() {
+  return process.env.NVIDIA_API_KEY || '';
+}
+
+function getNvidiaModel() {
+  return process.env.NVIDIA_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b';
+}
+
+function getVisionModel() {
+  return process.env.NVIDIA_VISION_MODEL || 'meta/llama-3.2-11b-vision-instruct';
+}
+
+function normalizeDate(d) {
+  if (!d || typeof d !== 'string') return new Date().toISOString().split('T')[0];
+  const trimmed = d.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+function normalizeAmount(val) {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') return isNaN(val) ? null : val;
+  if (typeof val === 'string') {
+    const cleaned = val.replace(/[^0-9.-]+/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  }
+  return null;
+}
+
+function extractReceiptJson(raw) {
+  if (!raw) return null;
+  const text = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  // Try direct parse
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.length > 0 ? parsed[0] : null;
+    if (typeof parsed === 'object' && parsed !== null) return parsed;
+  } catch {}
+
+  // Try line-by-line (NDJSON / multiple JSON objects on separate lines)
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const foundObjects = [];
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (obj && typeof obj === 'object') foundObjects.push(obj);
+    } catch {}
+  }
+  if (foundObjects.length > 0) return foundObjects[0];
+
+  // Try regex search for first { ... } block
+  const match = text.match(/\{[\s\S]*?\}/);
+  if (match) {
+    try {
+      const obj = JSON.parse(match[0]);
+      if (obj && typeof obj === 'object') return obj;
+    } catch {}
+  }
+
+  return null;
+}
 
 /**
  * Checks connection health to AI services.
  */
 async function getHealth() {
+  const apiKey = getNvidiaApiKey();
   const result = {
     python_service: false,
     nvidia_ai: false,
-    model: NVIDIA_MODEL,
-    vision_model: NVIDIA_VISION_MODEL,
+    model: getNvidiaModel(),
+    vision_model: getVisionModel(),
   };
 
   try {
@@ -22,7 +97,7 @@ async function getHealth() {
     if (res.ok) result.python_service = true;
   } catch {}
 
-  if (NVIDIA_API_KEY) {
+  if (apiKey) {
     result.nvidia_ai = true;
   }
 
@@ -35,41 +110,52 @@ async function getHealth() {
 /**
  * Calls NVIDIA OpenAI-compatible chat completion endpoint.
  */
-async function callNvidiaChat(messages, model = NVIDIA_MODEL, maxTokens = 600, temperature = 0.2) {
-  if (!NVIDIA_API_KEY) {
+async function callNvidiaChat(messages, model = null, maxTokens = 600, temperature = 0.2) {
+  const apiKey = getNvidiaApiKey();
+  const selectedModel = model || getNvidiaModel();
+
+  if (!apiKey) {
     throw new Error('NVIDIA_API_KEY not configured');
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
-  try {
-    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NVIDIA_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+    try {
+      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`NVIDIA API error ${res.status}: ${errText}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        if (res.status >= 500 && attempt === 1) {
+          console.warn(`[AI Service] NVIDIA API 5xx temporary glitch (${res.status}), retrying in 1s...`);
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        throw new Error(`NVIDIA API error ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    } catch (err) {
+      clearTimeout(timeout);
+      if (attempt === 2 || err.name === 'AbortError') throw err;
+      await new Promise((r) => setTimeout(r, 1000));
     }
-
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || '';
-  } catch (err) {
-    clearTimeout(timeout);
-    throw err;
   }
 }
 
@@ -77,8 +163,11 @@ async function callNvidiaChat(messages, model = NVIDIA_MODEL, maxTokens = 600, t
  * Uses NVIDIA Vision (or Python AI service) to extract receipt fields from an image buffer.
  */
 async function analyzeReceipt(fileBuffer, originalname = 'receipt.jpg', mimetype = 'image/jpeg') {
+  const apiKey = getNvidiaApiKey();
+  const visionModel = getVisionModel();
+
   // 1. Try NVIDIA Llama 3.2 Vision first
-  if (NVIDIA_API_KEY && fileBuffer) {
+  if (apiKey && fileBuffer) {
     try {
       const base64Img = `data:${mimetype};base64,${fileBuffer.toString('base64')}`;
       const prompt = `Analyze this receipt image. Extract the business details and return ONLY a valid JSON object with NO markdown formatting, matching this exact shape:
@@ -99,25 +188,25 @@ async function analyzeReceipt(fileBuffer, originalname = 'receipt.jpg', mimetype
             ],
           },
         ],
-        NVIDIA_VISION_MODEL,
-        250,
+        visionModel,
+        600,
         0.1
       );
 
-      // Clean JSON
-      const jsonText = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(jsonText);
-      return {
-        success: true,
-        provider: 'nvidia-vision',
-        data: {
-          vendor: parsed.vendor || null,
-          amount: parsed.amount ? parseFloat(parsed.amount) : null,
-          date: parsed.date || new Date().toISOString().split('T')[0],
-          category: parsed.category || 'Other',
-          raw_text: raw,
-        },
-      };
+      const parsed = extractReceiptJson(raw);
+      if (parsed) {
+        return {
+          success: true,
+          provider: 'nvidia-vision',
+          data: {
+            vendor: parsed.vendor || null,
+            amount: normalizeAmount(parsed.amount),
+            date: normalizeDate(parsed.date),
+            category: parsed.category || 'Other',
+            raw_text: raw,
+          },
+        };
+      }
     } catch (err) {
       console.warn('[AI Service] NVIDIA Vision extraction failed, attempting fallback:', err.message);
     }
@@ -182,9 +271,9 @@ async function generateSavingsAdvice({ targetMonthlySave, categoryBreakdown = []
 
   if (NVIDIA_API_KEY) {
     try {
-      const prompt = `You are an elite financial strategist advising an Indian business owner (Sharma Furniture & Hardware).
+      const prompt = `You are an elite financial strategist advising an Indian business owner.
 The business currently spends approximately ₹${Math.round(totalSpend)} monthly.
-Category breakdown: ${catsSummary || 'Raw Materials: ₹35,000, Electricity & Utilities: ₹9,000, Transportation: ₹6,000, Packaging: ₹4,000, Maintenance: ₹3,000, Marketing: ₹4,000, Labour: ₹20,000'}.
+Category breakdown: ${catsSummary || 'No categorized expenses recorded yet'}.
 
 The owner wants to achieve a monthly savings target of ₹${target}.
 
@@ -326,7 +415,7 @@ Return ONLY a valid JSON object matching:
 async function explainUnusualExpense({ vendor, category, amount, historical_average }) {
   if (NVIDIA_API_KEY) {
     try {
-      const prompt = `An expense was flagged as unusual for a small furniture business:
+      const prompt = `An expense was flagged as unusual for a business:
 Category: ${category}
 Vendor: ${vendor}
 Current Amount: ₹${amount}

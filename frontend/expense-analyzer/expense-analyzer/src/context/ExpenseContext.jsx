@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 import {
   fetchExpenses,
   createExpense,
@@ -11,22 +12,30 @@ import {
 const ExpenseContext = createContext(null);
 
 export function ExpenseProvider({ children }) {
+  const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([fetchExpenses(), fetchBudget()]).then(([expenseData, budgetData]) => {
-      if (!isMounted) return;
-      setExpenses(expenseData);
-      setMonthlyBudget(budgetData.monthlyBudget);
-      setIsLoading(false);
-    });
+    setIsLoading(true);
+    Promise.all([fetchExpenses(), fetchBudget()])
+      .then(([expenseData, budgetData]) => {
+        if (!isMounted) return;
+        setExpenses(expenseData || []);
+        setMonthlyBudget(budgetData?.monthlyBudget || 0);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load user expenses', err);
+        if (isMounted) setIsLoading(false);
+      });
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user?.id]);
 
   const addExpense = useCallback(async (expense) => {
     const created = await createExpense(expense);

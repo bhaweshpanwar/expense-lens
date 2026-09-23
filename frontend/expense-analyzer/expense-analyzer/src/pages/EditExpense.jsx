@@ -31,7 +31,7 @@ export default function EditExpense() {
   };
 
   return (
-    <div className="max-w-lg">
+    <div className="max-w-2xl">
       <div className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-lg p-6">
         <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-5">
           {t('editExpense.title', { vendor: expense.vendor })}

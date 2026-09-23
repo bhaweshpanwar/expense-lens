@@ -105,7 +105,7 @@ export default function AddExpense() {
       const extracted = await analyzeReceiptImage(file);
       setInitialFormValues((prev) => ({
         ...prev,
-        amount: extracted.amount || prev.amount,
+        amount: (extracted.amount !== null && extracted.amount !== undefined && extracted.amount !== '') ? extracted.amount : prev.amount,
         vendor: extracted.vendor || prev.vendor,
         category: extracted.category || prev.category,
         date: extracted.date || prev.date,
@@ -115,7 +115,7 @@ export default function AddExpense() {
       if (extracted.vendor || extracted.amount) {
         setAiStatus({
           type: 'success',
-          message: `AI extracted details from ${file.name}. Please review below!`,
+          message: `AI extracted details from ${file.name}. Please review the populated fields in the form on the left!`,
         });
       } else {
         setAiStatus({
@@ -285,7 +285,7 @@ export default function AddExpense() {
   };
 
   return (
-    <div className="max-w-lg space-y-4">
+    <div className="w-full space-y-6">
       {/* Hidden File Inputs */}
       <input
         ref={imageInputRef}
@@ -302,16 +302,34 @@ export default function AddExpense() {
         onChange={handleCsvSelected}
       />
 
-      {/* Quick Upload Action Bar */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wider">
-            Quick Add & Import
-          </span>
-          <span className="text-[11px] text-[var(--color-brand)] font-medium flex items-center gap-1">
-            <Sparkles size={13} /> AI Assisted
-          </span>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Main Expense Form */}
+        <div className="lg:col-span-7 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-lg p-6">
+          <div className="mb-5">
+            <h2 className="text-base font-semibold text-[var(--color-ink)]">{t('addExpense.newExpense')}</h2>
+            <p className="text-xs text-[var(--color-ink-soft)] mt-0.5">
+              Enter expense details manually or auto-populate using AI receipt scan or CSV batch import on the right.
+            </p>
+          </div>
+          <ExpenseForm
+            initialValues={initialFormValues}
+            onSubmit={handleSubmit}
+            onCancel={() => navigate('/expenses')}
+            submitLabel={t('common.addExpense')}
+          />
         </div>
+
+        {/* Right Column: AI Quick Add & Batch Import */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wider">
+                Quick Add & Import
+              </span>
+              <span className="text-[11px] text-[var(--color-brand)] font-medium flex items-center gap-1">
+                <Sparkles size={13} /> AI Assisted
+              </span>
+            </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -579,15 +597,7 @@ export default function AddExpense() {
         )}
       </div>
 
-      {/* Main Expense Form */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-line)] rounded-lg p-6">
-        <h2 className="text-sm font-semibold text-[var(--color-ink)] mb-5">{t('addExpense.newExpense')}</h2>
-        <ExpenseForm
-          initialValues={initialFormValues}
-          onSubmit={handleSubmit}
-          onCancel={() => navigate('/expenses')}
-          submitLabel={t('common.addExpense')}
-        />
+        </div>
       </div>
     </div>
   );

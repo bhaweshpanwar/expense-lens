@@ -1,18 +1,63 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Search } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import ExpenseTable from '../components/ExpenseTable';
 import Modal from '../components/Modal';
-import { categories } from '../data/categories';
-import { vendors } from '../data/vendors';
+import { fetchVendors, fetchCategories } from '../services/api';
 import { formatCurrency } from '../utils/expenseCalculations';
 
 export default function Expenses() {
   const { expenses, removeExpense } = useExpenses();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const [dbVendors, setDbVendors] = useState([]);
+  const [dbCategories, setDbCategories] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([fetchVendors(), fetchCategories()]).then(([vendorsData, catsData]) => {
+      if (isMounted) {
+        if (Array.isArray(vendorsData)) setDbVendors(vendorsData);
+        if (Array.isArray(catsData)) setDbCategories(catsData);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [expenses]);
+
+  const userVendors = useMemo(() => {
+    const set = new Set();
+    expenses.forEach((e) => {
+      if (e.vendor && typeof e.vendor === 'string' && e.vendor.trim()) {
+        set.add(e.vendor.trim());
+      }
+    });
+    dbVendors.forEach((v) => {
+      if (v.name && typeof v.name === 'string' && v.name.trim()) {
+        set.add(v.name.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [expenses, dbVendors]);
+
+  const userCategories = useMemo(() => {
+    const set = new Set();
+    dbCategories.forEach((c) => {
+      if (c.name && typeof c.name === 'string' && c.name.trim()) {
+        set.add(c.name.trim());
+      }
+    });
+    expenses.forEach((e) => {
+      if (e.category && typeof e.category === 'string' && e.category.trim()) {
+        set.add(e.category.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [expenses, dbCategories]);
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -82,9 +127,9 @@ export default function Expenses() {
             className="rounded-md border border-[var(--color-line)] px-3 py-2 text-sm bg-[var(--color-surface)]"
           >
             <option value="">{t('common.allCategories')}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {t(`categoryNames.${c.name}`, c.name)}
+            {userCategories.map((cName) => (
+              <option key={cName} value={cName}>
+                {t(`categoryNames.${cName}`, cName)}
               </option>
             ))}
           </select>
@@ -95,8 +140,10 @@ export default function Expenses() {
             className="rounded-md border border-[var(--color-line)] px-3 py-2 text-sm bg-[var(--color-surface)]"
           >
             <option value="">{t('common.allVendors')}</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name}>{v.name}</option>
+            {userVendors.map((vendorName) => (
+              <option key={vendorName} value={vendorName}>
+                {vendorName}
+              </option>
             ))}
           </select>
 

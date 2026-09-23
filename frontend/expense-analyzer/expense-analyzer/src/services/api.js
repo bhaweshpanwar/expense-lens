@@ -2,12 +2,10 @@
 // Connected to Express backend at http://localhost:5000/api
 
 import axios from 'axios';
-import { initialExpenses, monthlyBudget as defaultBudget } from '../data/expenses';
 import { categories as defaultCategories } from '../data/categories';
-import { vendors as defaultVendors } from '../data/vendors';
-import { unusualExpenses as defaultUnusualExpenses } from '../data/unusualExpenses';
 
-const AUTH_SESSION_KEY = 'sharma_auth_session';
+const AUTH_SESSION_KEY = 'expenselens_auth_session';
+const LEGACY_AUTH_SESSION_KEY = 'sharma_auth_session';
 const AUTH_TOKEN_KEY = 'auth_token';
 
 export const apiClient = axios.create({
@@ -126,8 +124,8 @@ export async function fetchExpenses() {
       : (payload?.transactions || []);
     return list.map(formatTransaction);
   } catch (err) {
-    console.warn('Failed to fetch transactions from backend, falling back to mock data', err);
-    return [...initialExpenses];
+    console.warn('Failed to fetch transactions from backend', err);
+    return [];
   }
 }
 
@@ -198,15 +196,15 @@ export async function fetchCategories() {
           id: cat.id,
           name: cat.name,
           color: defaultCat?.color || '#23514A',
-          monthlyBudget: defaultCat?.monthlyBudget || 10000,
+          monthlyBudget: 0,
           type: cat.type || 'expense',
         };
       });
     }
   } catch (err) {
-    console.warn('Failed to fetch categories from backend, using defaults', err);
+    console.warn('Failed to fetch categories from backend', err);
   }
-  return defaultCategories;
+  return [];
 }
 
 export async function fetchVendors() {
@@ -214,13 +212,11 @@ export async function fetchVendors() {
     const res = await apiClient.get('/vendors');
     const payload = res.data?.data !== undefined ? res.data.data : res.data;
     const dbVendors = Array.isArray(payload) ? payload : (payload?.vendors || []);
-    if (dbVendors.length > 0) {
-      return dbVendors;
-    }
+    return dbVendors;
   } catch (err) {
-    console.warn('Failed to fetch vendors from backend, using defaults', err);
+    console.warn('Failed to fetch vendors from backend', err);
+    return [];
   }
-  return defaultVendors;
 }
 
 export async function fetchBudget() {
@@ -231,8 +227,10 @@ export async function fetchBudget() {
     if (overall && overall.limit_amount > 0) {
       return { monthlyBudget: overall.limit_amount };
     }
-  } catch {}
-  return { monthlyBudget: defaultBudget };
+  } catch (err) {
+    console.warn('Failed to fetch budget from backend', err);
+  }
+  return { monthlyBudget: 0 };
 }
 
 export async function fetchUnusualExpenses() {
@@ -258,8 +256,8 @@ export async function fetchUnusualExpenses() {
       };
     });
   } catch (err) {
-    console.warn('Failed to fetch unusual transactions, using fallback', err);
-    return defaultUnusualExpenses;
+    console.warn('Failed to fetch unusual transactions', err);
+    return [];
   }
 }
 
@@ -268,7 +266,9 @@ export async function fetchUnusualExpenses() {
 export async function getCurrentUser() {
   try {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    const session = localStorage.getItem(AUTH_SESSION_KEY);
+    const session =
+      localStorage.getItem(AUTH_SESSION_KEY) ||
+      localStorage.getItem(LEGACY_AUTH_SESSION_KEY);
     if (!token || !session) return null;
     return JSON.parse(session);
   } catch {
@@ -350,6 +350,7 @@ export async function logoutUser() {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(LEGACY_AUTH_SESSION_KEY);
     categoriesCache = null;
   } catch (e) {
     console.error('Failed to clear session', e);
@@ -431,7 +432,7 @@ export async function saveBudgetLimit({ category_id = null, limit_amount, period
   return res.data?.data;
 }
 
-export async function recommendBudgetLimits(categoryBreakdown = [], monthlyBudget = 100000) {
+export async function recommendBudgetLimits(categoryBreakdown = [], monthlyBudget = 0) {
   try {
     const res = await apiClient.post('/ai/recommend-budgets', {
       categoryBreakdown,
