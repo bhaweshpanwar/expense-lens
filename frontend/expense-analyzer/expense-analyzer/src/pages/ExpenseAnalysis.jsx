@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, PiggyBank, ArrowDownRight, CheckCircle2, Loader2, Target } from 'lucide-react';
+import { Sparkles, PiggyBank, ArrowDownRight, CheckCircle2, Loader2, Target, AlertCircle } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import { getSavingsSuggestion, createSavingsGoal } from '../services/api';
 import CategoryChart from '../components/CategoryChart';
@@ -35,6 +35,7 @@ export default function ExpenseAnalysis() {
   const [targetSaveAmount, setTargetSaveAmount] = useState('10000');
   const [isAnalyzingSavings, setIsAnalyzingSavings] = useState(false);
   const [savingsPlan, setSavingsPlan] = useState(null);
+  const [savingsError, setSavingsError] = useState(null);
   const [goalSavedNotice, setGoalSavedNotice] = useState(null);
 
   const handleAnalyzeSavings = async () => {
@@ -42,11 +43,17 @@ export default function ExpenseAnalysis() {
     if (!num || num <= 0) return;
     setIsAnalyzingSavings(true);
     setGoalSavedNotice(null);
+    setSavingsError(null);
     try {
       const plan = await getSavingsSuggestion(num);
-      setSavingsPlan(plan);
+      if (plan && plan.success !== false) {
+        setSavingsPlan(plan);
+      } else {
+        setSavingsError(plan?.error || 'Unable to generate savings advice. Please ensure you have recorded expenses.');
+      }
     } catch (err) {
       console.error('Failed to get savings suggestions', err);
+      setSavingsError(err.response?.data?.error || 'AI savings analysis encountered an error. Please try again.');
     } finally {
       setIsAnalyzingSavings(false);
     }
@@ -223,6 +230,14 @@ export default function ExpenseAnalysis() {
             )}
           </button>
         </div>
+
+        {/* AI Error Alert */}
+        {savingsError && (
+          <div className="mt-3 p-3 rounded-lg bg-[var(--color-bad-light)] text-[var(--color-bad)] border border-[var(--color-bad)]/30 text-xs flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{savingsError}</span>
+          </div>
+        )}
 
         {/* AI Recommendations Display */}
         {savingsPlan && (

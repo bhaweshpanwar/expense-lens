@@ -103,8 +103,54 @@ const recommendBudgets = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/ai/analyze-ledger
+ * Extracts multi-transaction entries from a daily ledger / cashbook image
+ */
+const analyzeLedger = async (req, res, next) => {
+  try {
+    let fileBuffer = null;
+    let filename = 'ledger.jpg';
+    let mimetype = 'image/jpeg';
+
+    if (req.file) {
+      fileBuffer = req.file.buffer;
+      filename = req.file.originalname || filename;
+      mimetype = req.file.mimetype || mimetype;
+    } else if (req.body && req.body.image) {
+      const base64Str = req.body.image;
+      const matches = base64Str.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (matches) {
+        mimetype = matches[1];
+        fileBuffer = Buffer.from(matches[2], 'base64');
+      } else {
+        fileBuffer = Buffer.from(base64Str, 'base64');
+      }
+    }
+
+    if (!fileBuffer) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a ledger image via multipart file upload or base64 JSON payload.',
+      });
+    }
+
+    const result = await aiService.analyzeLedger(fileBuffer, filename, mimetype);
+
+    res.json({
+      success: result.success,
+      count: result.count,
+      transactions: result.transactions,
+      error: result.error || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   analyzeReceipt,
+  analyzeLedger,
   explainUnusual,
   recommendBudgets,
   getHealth,

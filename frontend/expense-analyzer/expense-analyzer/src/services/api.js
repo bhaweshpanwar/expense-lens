@@ -2,10 +2,12 @@
 // Connected to Express backend at http://localhost:5000/api
 
 import axios from 'axios';
+import { initialExpenses, monthlyBudget as defaultBudget } from '../data/expenses';
 import { categories as defaultCategories } from '../data/categories';
+import { vendors as defaultVendors } from '../data/vendors';
+import { unusualExpenses as defaultUnusualExpenses } from '../data/unusualExpenses';
 
-const AUTH_SESSION_KEY = 'expenselens_auth_session';
-const LEGACY_AUTH_SESSION_KEY = 'sharma_auth_session';
+const AUTH_SESSION_KEY = 'sharma_auth_session';
 const AUTH_TOKEN_KEY = 'auth_token';
 
 export const apiClient = axios.create({
@@ -124,8 +126,8 @@ export async function fetchExpenses() {
       : (payload?.transactions || []);
     return list.map(formatTransaction);
   } catch (err) {
-    console.warn('Failed to fetch transactions from backend', err);
-    return [];
+    console.warn('Failed to fetch transactions from backend, falling back to mock data', err);
+    return [...initialExpenses];
   }
 }
 
@@ -196,15 +198,15 @@ export async function fetchCategories() {
           id: cat.id,
           name: cat.name,
           color: defaultCat?.color || '#23514A',
-          monthlyBudget: 0,
+          monthlyBudget: defaultCat?.monthlyBudget || 10000,
           type: cat.type || 'expense',
         };
       });
     }
   } catch (err) {
-    console.warn('Failed to fetch categories from backend', err);
+    console.warn('Failed to fetch categories from backend, using defaults', err);
   }
-  return [];
+  return defaultCategories;
 }
 
 export async function fetchVendors() {
@@ -212,11 +214,13 @@ export async function fetchVendors() {
     const res = await apiClient.get('/vendors');
     const payload = res.data?.data !== undefined ? res.data.data : res.data;
     const dbVendors = Array.isArray(payload) ? payload : (payload?.vendors || []);
-    return dbVendors;
+    if (dbVendors.length > 0) {
+      return dbVendors;
+    }
   } catch (err) {
-    console.warn('Failed to fetch vendors from backend', err);
-    return [];
+    console.warn('Failed to fetch vendors from backend, using defaults', err);
   }
+  return defaultVendors;
 }
 
 export async function fetchBudget() {
@@ -227,10 +231,8 @@ export async function fetchBudget() {
     if (overall && overall.limit_amount > 0) {
       return { monthlyBudget: overall.limit_amount };
     }
-  } catch (err) {
-    console.warn('Failed to fetch budget from backend', err);
-  }
-  return { monthlyBudget: 0 };
+  } catch {}
+  return { monthlyBudget: defaultBudget };
 }
 
 export async function fetchUnusualExpenses() {
@@ -256,8 +258,8 @@ export async function fetchUnusualExpenses() {
       };
     });
   } catch (err) {
-    console.warn('Failed to fetch unusual transactions', err);
-    return [];
+    console.warn('Failed to fetch unusual transactions, using fallback', err);
+    return defaultUnusualExpenses;
   }
 }
 
@@ -266,9 +268,7 @@ export async function fetchUnusualExpenses() {
 export async function getCurrentUser() {
   try {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    const session =
-      localStorage.getItem(AUTH_SESSION_KEY) ||
-      localStorage.getItem(LEGACY_AUTH_SESSION_KEY);
+    const session = localStorage.getItem(AUTH_SESSION_KEY);
     if (!token || !session) return null;
     return JSON.parse(session);
   } catch {
@@ -289,9 +289,9 @@ export async function loginUser(email, password) {
 
     const sessionUser = {
       id: u?.id || 'usr-1',
-      name: u?.name || 'Bhawesh Panwar',
+      name: u?.name || 'Ramesh Sharma',
       email: u?.email || email,
-      business_name: u?.business_name || 'ExpenseLens',
+      business_name: u?.business_name || "Sharma's Furniture",
       role: u?.role || 'Owner',
     };
 
@@ -350,7 +350,6 @@ export async function logoutUser() {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_SESSION_KEY);
-    localStorage.removeItem(LEGACY_AUTH_SESSION_KEY);
     categoriesCache = null;
   } catch (e) {
     console.error('Failed to clear session', e);
@@ -379,6 +378,31 @@ export async function analyzeReceiptImage(file) {
     raw_text: payload?.raw_text || '',
     fallback: Boolean(res.data?.fallback),
     error: res.data?.error || null,
+  };
+}
+
+export async function analyzeLedgerImage(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await apiClient.post('/ai/analyze-ledger', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  const data = res.data || {};
+  return {
+    success: Boolean(data.success),
+    count: data.count || 0,
+    transactions: (data.transactions || []).map((t) => ({
+      vendor: t.vendor || '',
+      amount: t.amount ? Number(t.amount) : '',
+      date: t.date ? formatDate(t.date) : new Date().toISOString().split('T')[0],
+      category: t.category || 'Other',
+      description: t.description || '',
+    })),
+    error: data.error || null,
   };
 }
 
@@ -432,7 +456,7 @@ export async function saveBudgetLimit({ category_id = null, limit_amount, period
   return res.data?.data;
 }
 
-export async function recommendBudgetLimits(categoryBreakdown = [], monthlyBudget = 0) {
+export async function recommendBudgetLimits(categoryBreakdown = [], monthlyBudget = 100000) {
   try {
     const res = await apiClient.post('/ai/recommend-budgets', {
       categoryBreakdown,

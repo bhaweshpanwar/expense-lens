@@ -25,8 +25,11 @@ router.get('/health', aiController.getHealth);
 // Authenticated AI routes
 router.use(authMiddleware);
 
-// Analyze receipt image via OCR + Gemini
+// Analyze receipt image via OCR + Vision AI
 router.post('/analyze-receipt', upload.single('file'), aiController.analyzeReceipt);
+
+// Analyze daily ledger / cashbook multi-item image via Vision AI
+router.post('/analyze-ledger', upload.single('file'), aiController.analyzeLedger);
 
 // Explain unusual outlier via LLM
 router.post('/explain-unusual', aiController.explainUnusual);

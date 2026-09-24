@@ -76,21 +76,38 @@ const getSuggestion = async (req, res, next) => {
   try {
     const { target_monthly_save = 10000 } = req.body;
 
-    // Fetch actual category breakdown over trailing 3 months to calculate monthly averages
-    const query = `
-      SELECT c.name as category, SUM(t.amount) as total
+    // Fetch user details for tailored advice
+    const userRes = await db.query('SELECT business_name, name FROM users WHERE id = $1', [req.userId]);
+    const businessName = userRes.rows[0]?.business_name || userRes.rows[0]?.name || '';
+
+    // Fetch actual category breakdown over trailing 3 months
+    const trailing3Query = `
+      SELECT COALESCE(c.name, 'Other') as category, SUM(t.amount) as total
       FROM active_transactions t
-      JOIN categories c ON c.id = t.category_id
+      LEFT JOIN categories c ON c.id = t.category_id
       WHERE t.user_id = $1 AND t.type = 'expense'
         AND t.txn_date >= (CURRENT_DATE - INTERVAL '3 months')
-      GROUP BY c.name
+      GROUP BY COALESCE(c.name, 'Other')
       ORDER BY total DESC;
     `;
-    const result = await db.query(query, [req.userId]);
+    let result = await db.query(trailing3Query, [req.userId]);
+
+    // Fallback: If no transactions in trailing 3 months, fetch all historical expenses
+    if (result.rows.length === 0) {
+      const allHistoryQuery = `
+        SELECT COALESCE(c.name, 'Other') as category, SUM(t.amount) as total
+        FROM active_transactions t
+        LEFT JOIN categories c ON c.id = t.category_id
+        WHERE t.user_id = $1 AND t.type = 'expense'
+        GROUP BY COALESCE(c.name, 'Other')
+        ORDER BY total DESC;
+      `;
+      result = await db.query(allHistoryQuery, [req.userId]);
+    }
 
     const categoryBreakdown = result.rows.map((r) => ({
       category: r.category,
-      total: Math.round(parseFloat(r.total) / 3), // monthly average
+      total: Math.round(parseFloat(r.total) / (result.rows.length > 0 ? 3 : 1)), // estimated monthly average
     }));
 
     const totalSpend = categoryBreakdown.reduce((sum, c) => sum + c.total, 0);
@@ -99,6 +116,7 @@ const getSuggestion = async (req, res, next) => {
       targetMonthlySave: Number(target_monthly_save),
       categoryBreakdown,
       totalSpend,
+      businessName,
     });
 
     res.json({
