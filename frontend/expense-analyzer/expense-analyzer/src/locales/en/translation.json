@@ -39,6 +39,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "expenses": "Expenses",
+    "payables": "Accounts Payable (Udhaari)",
     "taxCenter": "GST & Tax Center",
     "categories": "Categories",
     "analysis": "Expense Analysis",
@@ -63,7 +64,9 @@
     "unusualExpensesTitle": "Unusual Expenses",
     "unusualExpensesSubtitle": "Transactions flagged outside normal patterns",
     "taxCenterTitle": "GST & Tax Intelligence",
-    "taxCenterSubtitle": "GSTR-2B reconciliation, Input Tax Credit (ITC) tracking & CA exports"
+    "taxCenterSubtitle": "GSTR-2B reconciliation, Input Tax Credit (ITC) tracking & CA exports",
+    "payablesTitle": "Accounts Payable & Credit Terms (\"Udhaari\")",
+    "payablesSubtitle": "Liability aging schedule, due date countdowns & vendor payment settlements"
   },
   "dashboard": {
     "monthlyBudgetSummary": "Monthly Budget Summary — {{month}}",
@@ -108,10 +111,25 @@
     "gstInvoiceLabel": "This is a GST Tax Invoice",
     "gstRateLabel": "GST Rate (%)",
     "vendorGstinLabel": "Vendor GSTIN",
+    "paymentStatusTitle": "Payment Status & Credit Terms (\"Udhaari\")",
+    "paymentStatusSubtitle": "Specify if this bill was settled upfront or purchased on vendor credit terms.",
+    "creditTermPresets": "Quick Credit Terms",
+    "dueDateLabel": "Invoice Due Date",
+    "amountPaidLabel": "Amount Paid So Far (₹)",
     "errors": {
       "amount": "Amount is required and must be greater than 0.",
       "category": "Category is required.",
       "date": "Transaction date is required."
+    }
+  },
+  "payables": {
+    "pageTitle": "Accounts Payable & Credit Terms (\"Udhaari\")",
+    "pageSubtitle": "Track upcoming vendor payments, credit term aging schedules, and due date alerts.",
+    "loadError": "Failed to load payables data. Please refresh.",
+    "status": {
+      "paid": "Paid (Immediate)",
+      "pending": "Pending (Credit / Udhaari)",
+      "partiallyPaid": "Partially Paid"
     }
   },
   "addExpense": {

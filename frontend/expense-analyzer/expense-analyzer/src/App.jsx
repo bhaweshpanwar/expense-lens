@@ -17,6 +17,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { ExpenseProvider } from './context/ExpenseContext';
 import GstCenter from './pages/GstCenter';
+import AccountsPayable from './pages/AccountsPayable';
 
 function resolveMeta(pathname, t) {
   if (pathname === '/') {
@@ -46,6 +47,9 @@ function resolveMeta(pathname, t) {
   if (pathname === '/tax') {
     return { title: t('meta.taxCenterTitle'), subtitle: t('meta.taxCenterSubtitle') };
   }
+  if (pathname === '/payables') {
+    return { title: t('meta.payablesTitle'), subtitle: t('meta.payablesSubtitle') };
+  }
   return { title: t('appName'), subtitle: '' };
 }
 
@@ -73,6 +77,7 @@ function AppShell() {
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/expenses/new" element={<AddExpense />} />
             <Route path="/expenses/:id/edit" element={<EditExpense />} />
+            <Route path="/payables" element={<ProtectedRoute><AccountsPayable /></ProtectedRoute>} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/analysis" element={<ExpenseAnalysis />} />
             <Route path="/budget-alerts" element={<BudgetAlerts />} />

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { categories as defaultCategories } from '../data/categories';
 import { fetchVendors, fetchCategories } from '../services/api';
 import { useExpenses } from '../context/ExpenseContext';
-import { Receipt, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Receipt, CheckCircle2, AlertCircle, Info, CreditCard, CalendarClock, Clock } from 'lucide-react';
 
 const emptyForm = {
   amount: '',
@@ -15,7 +15,11 @@ const emptyForm = {
   gst_rate: 18,
   is_inter_state: false,
   is_tax_inclusive: true,
-  vendor_gstin: ''
+  vendor_gstin: '',
+  payment_status: 'paid', // 'paid', 'pending', 'partially_paid'
+  credit_terms_days: 0,
+  due_date: '',
+  amount_paid: ''
 };
 
 export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitLabel }) {
@@ -128,6 +132,28 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
     const regex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     return regex.test(gstin);
   };
+
+  const handleCreditTermSelect = (days) => {
+    const baseDate = form.date ? new Date(form.date) : new Date();
+    if (days === 0) {
+      setForm((p) => ({ ...p, credit_terms_days: 0, due_date: form.date || '' }));
+    } else {
+      const dueDate = new Date(baseDate.getTime() + days * 86400000);
+      setForm((p) => ({
+        ...p,
+        credit_terms_days: days,
+        due_date: dueDate.toISOString().split('T')[0]
+      }));
+    }
+  };
+
+  const remainingOutstanding = useMemo(() => {
+    const total = parseFloat(form.amount) || 0;
+    if (form.payment_status === 'paid') return 0;
+    if (form.payment_status === 'pending') return total;
+    const paid = parseFloat(form.amount_paid) || 0;
+    return Math.max(0, total - paid);
+  }, [form.amount, form.payment_status, form.amount_paid]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full">
@@ -331,6 +357,129 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
                 {gstBreakdown?.itc_eligible ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
                 <span>{gstBreakdown?.itc_eligible ? 'Eligible for ITC' : 'Blocked ITC Sec 17(5)'}</span>
               </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Payment Status & Credit Terms ("Udhaari") Section */}
+      <div className="p-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CreditCard size={18} className="text-[var(--color-brand)]" />
+            <div>
+              <label className="text-sm font-semibold text-[var(--color-ink)] block">
+                {t('expenseForm.paymentStatusTitle', 'Payment Status & Credit Terms ("Udhaari")')}
+              </label>
+              <p className="text-[11px] text-[var(--color-ink-soft)]">
+                {t('expenseForm.paymentStatusSubtitle', 'Specify if this bill was settled upfront or purchased on vendor credit terms.')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[
+            { id: 'paid', label: t('payables.status.paid', 'Paid (Immediate)'), icon: CheckCircle2, color: 'text-green-600' },
+            { id: 'pending', label: t('payables.status.pending', 'Pending (Credit / Udhaari)'), icon: Clock, color: 'text-amber-600' },
+            { id: 'partially_paid', label: t('payables.status.partiallyPaid', 'Partially Paid'), icon: CalendarClock, color: 'text-blue-600' }
+          ].map(({ id, label, icon: Icon, color }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setForm(p => {
+                  const nextStatus = id;
+                  let nextAmountPaid = p.amount_paid;
+                  if (nextStatus === 'paid') nextAmountPaid = p.amount;
+                  if (nextStatus === 'pending') nextAmountPaid = 0;
+                  return { ...p, payment_status: nextStatus, amount_paid: nextAmountPaid };
+                });
+              }}
+              className={`p-2.5 rounded-lg border text-left flex flex-col gap-1 transition-all ${
+                form.payment_status === id
+                  ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/5 ring-1 ring-[var(--color-brand)]'
+                  : 'border-[var(--color-line)] bg-white hover:border-[var(--color-brand)]/50'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Icon size={14} className={color} />
+                <span className="text-xs font-semibold text-[var(--color-ink)]">{label}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {form.payment_status !== 'paid' && (
+          <div className="pt-3 border-t border-[var(--color-line)] space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1.5">
+                {t('expenseForm.creditTermPresets', 'Quick Credit Terms')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'Immediate (0d)', days: 0 },
+                  { label: '15 Days', days: 15 },
+                  { label: '30 Days', days: 30 },
+                  { label: '45 Days', days: 45 },
+                  { label: '60 Days', days: 60 }
+                ].map(({ label, days }) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => handleCreditTermSelect(days)}
+                    className={`px-3 py-1 text-xs rounded border transition-all ${
+                      form.credit_terms_days === days
+                        ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                        : 'bg-white text-[var(--color-ink)] border-[var(--color-line)] hover:border-[var(--color-brand)]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">
+                  {t('expenseForm.dueDateLabel', 'Invoice Due Date')} <span className="text-[var(--color-bad)]">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={form.due_date}
+                  onChange={handleChange('due_date')}
+                  className="w-full px-3 py-1.5 text-xs rounded border border-[var(--color-line)] bg-white text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--color-brand)]"
+                />
+              </div>
+
+              {form.payment_status === 'partially_paid' && (
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">
+                    {t('expenseForm.amountPaidLabel', 'Amount Paid So Far (₹)')}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={form.amount || undefined}
+                    step="0.01"
+                    value={form.amount_paid}
+                    onChange={handleChange('amount_paid')}
+                    placeholder="e.g. 5000"
+                    className="w-full px-3 py-1.5 text-xs rounded border border-[var(--color-line)] bg-white text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--color-brand)]"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Outstanding liability pill */}
+            <div className="p-2.5 rounded-md bg-[var(--color-paper)] border border-[var(--color-line)] flex items-center justify-between text-xs">
+              <span className="text-[var(--color-ink-soft)] font-medium">
+                Outstanding Udhaari Liability:
+              </span>
+              <span className="font-bold text-[var(--color-bad)] text-sm">
+                ₹{remainingOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
         )}

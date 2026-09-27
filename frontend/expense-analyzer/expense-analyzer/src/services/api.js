@@ -82,6 +82,12 @@ function formatTransaction(t) {
     type: t.type || 'expense',
     is_flagged_unusual: Boolean(t.is_flagged_unusual),
     flag_reason: t.flag_reason || null,
+    payment_status: t.payment_status || 'paid',
+    due_date: t.due_date ? formatDate(t.due_date) : null,
+    credit_terms_days: t.credit_terms_days || 0,
+    amount_paid: t.amount_paid !== undefined && t.amount_paid !== null ? parseFloat(t.amount_paid) : (t.payment_status === 'paid' ? numAmount : 0),
+    outstanding_amount: Math.max(0, numAmount - (t.amount_paid !== undefined && t.amount_paid !== null ? parseFloat(t.amount_paid) : (t.payment_status === 'paid' ? numAmount : 0))),
+    payment_date: t.payment_date ? formatDate(t.payment_date) : null,
   };
 }
 
@@ -159,6 +165,11 @@ export async function createExpense(expense) {
     is_tax_inclusive: expense.is_tax_inclusive !== false,
     is_inter_state: expense.is_inter_state || false,
     vendor_gstin: expense.vendor_gstin || undefined,
+    // Payables & Credit Terms Fields
+    payment_status: expense.payment_status || 'paid',
+    due_date: expense.due_date || undefined,
+    credit_terms_days: expense.credit_terms_days !== undefined ? Number(expense.credit_terms_days) : 0,
+    amount_paid: expense.amount_paid !== undefined ? Number(expense.amount_paid) : undefined,
   };
 
   const res = await apiClient.post('/transactions', payload);
@@ -185,6 +196,11 @@ export async function updateExpense(id, updates) {
     is_tax_inclusive: updates.is_tax_inclusive,
     is_inter_state: updates.is_inter_state,
     vendor_gstin: updates.vendor_gstin,
+    // Payables & Credit Terms Fields
+    payment_status: updates.payment_status,
+    due_date: updates.due_date,
+    credit_terms_days: updates.credit_terms_days !== undefined ? Number(updates.credit_terms_days) : undefined,
+    amount_paid: updates.amount_paid !== undefined ? Number(updates.amount_paid) : undefined,
   };
 
   const res = await apiClient.put(`/transactions/${id}`, payload);
@@ -228,6 +244,45 @@ export async function downloadGstr2bCsv({ from, to } = {}) {
     window.URL.revokeObjectURL(url);
   } catch (err) {
     console.error('Failed to download GSTR-2B CSV', err);
+    throw err;
+  }
+}
+
+// ---- Accounts Payable & Credit Terms ("Udhaari") ----------------------------
+
+export async function fetchPayablesSummary() {
+  try {
+    const res = await apiClient.get('/payables/summary');
+    return res.data?.data;
+  } catch (err) {
+    console.error('Failed to fetch payables summary', err);
+    throw err;
+  }
+}
+
+export async function fetchPayables({ status, search, limit = 50, offset = 0 } = {}) {
+  try {
+    const res = await apiClient.get('/payables', {
+      params: { status, search, limit, offset }
+    });
+    return res.data?.data || [];
+  } catch (err) {
+    console.error('Failed to fetch payables', err);
+    throw err;
+  }
+}
+
+export async function recordPayablePayment(id, { amount_paid_now, payment_date, payment_method, notes }) {
+  try {
+    const res = await apiClient.post(`/payables/${id}/record-payment`, {
+      amount_paid_now: Number(amount_paid_now),
+      payment_date: payment_date || undefined,
+      payment_method: payment_method || undefined,
+      notes: notes || undefined
+    });
+    return res.data;
+  } catch (err) {
+    console.error('Failed to record payable payment', err);
     throw err;
   }
 }

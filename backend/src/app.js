@@ -22,6 +22,7 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/budgets', require('./routes/budgets'));
 app.use('/api/savings-goal', require('./routes/savings'));
 app.use('/api/tax', require('./routes/tax'));
+app.use('/api/payables', require('./routes/payables'));
 
 app.use(errorHandler);
 

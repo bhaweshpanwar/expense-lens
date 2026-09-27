@@ -78,6 +78,11 @@ const getAll = async (req, res, next) => {
         vendor_gstin: row.vendor_gstin,
         itc_eligible: row.itc_eligible
       } : null,
+      payment_status: row.payment_status || 'paid',
+      due_date: row.due_date,
+      credit_terms_days: row.credit_terms_days || 0,
+      amount_paid: row.amount_paid !== null ? row.amount_paid : row.amount,
+      payment_date: row.payment_date,
       category: row.category_id ? { id: row.category_id, name: row.category_name } : null,
       vendor: row.vendor_id ? { id: row.vendor_id, name: row.vendor_name } : null,
     }));
@@ -98,7 +103,8 @@ const create = async (req, res, next) => {
   try {
     const {
       type, amount, category_id, vendor_id, vendor_name, txn_date, notes,
-      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin
+      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin,
+      payment_status, due_date, credit_terms_days, amount_paid
     } = req.body;
 
     // Validations
@@ -137,6 +143,24 @@ const create = async (req, res, next) => {
         );
         finalVendorId = newVendor.rows[0].id;
       }
+    }
+
+    // Payment & Credit Terms Logic
+    const termsDays = parseInt(credit_terms_days, 10) || 0;
+    let finalDueDate = due_date || null;
+    if (!finalDueDate && termsDays > 0 && txn_date) {
+      const d = new Date(txn_date);
+      d.setDate(d.getDate() + termsDays);
+      finalDueDate = d.toISOString().split('T')[0];
+    }
+
+    let finalPaymentStatus = payment_status || 'paid';
+    let finalAmountPaid = (finalPaymentStatus === 'paid') ? parseFloat(amount) : (amount_paid !== undefined ? parseFloat(amount_paid) : 0);
+    if (finalAmountPaid >= parseFloat(amount)) {
+      finalPaymentStatus = 'paid';
+      finalAmountPaid = parseFloat(amount);
+    } else if (finalAmountPaid > 0 && finalPaymentStatus !== 'paid') {
+      finalPaymentStatus = 'partially_paid';
     }
 
     // GST Calculation
@@ -178,14 +202,16 @@ const create = async (req, res, next) => {
     const result = await db.query(
       `INSERT INTO transactions (
         type, amount, category_id, vendor_id, txn_date, notes, user_id,
-        is_gst_bill, gst_rate, taxable_amount, cgst_amount, sgst_amount, igst_amount, vendor_gstin, itc_eligible
+        is_gst_bill, gst_rate, taxable_amount, cgst_amount, sgst_amount, igst_amount, vendor_gstin, itc_eligible,
+        payment_status, due_date, credit_terms_days, amount_paid
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
       [
         type, amount, category_id, finalVendorId, txn_date, notes, req.userId,
         gstData.is_gst_bill, gstData.gst_rate, gstData.taxable_amount,
         gstData.cgst_amount, gstData.sgst_amount, gstData.igst_amount,
-        gstData.vendor_gstin, gstData.itc_eligible
+        gstData.vendor_gstin, gstData.itc_eligible,
+        finalPaymentStatus, finalDueDate, termsDays, finalAmountPaid
       ]
     );
 
@@ -212,6 +238,11 @@ const create = async (req, res, next) => {
         source: row.source,
         is_flagged_unusual: row.is_flagged_unusual,
         created_at: row.created_at,
+        payment_status: row.payment_status || 'paid',
+        due_date: row.due_date,
+        credit_terms_days: row.credit_terms_days || 0,
+        amount_paid: row.amount_paid !== null ? row.amount_paid : row.amount,
+        payment_date: row.payment_date,
         gst_details: row.is_gst_bill ? {
           gst_rate: row.gst_rate,
           taxable_amount: row.taxable_amount,
@@ -235,7 +266,8 @@ const update = async (req, res, next) => {
     const { id } = req.params;
     const {
       type, amount, category_id, vendor_id, vendor_name, txn_date, notes,
-      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin
+      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin,
+      payment_status, due_date, credit_terms_days, amount_paid
     } = req.body;
 
     // Validation for updates
@@ -265,6 +297,17 @@ const update = async (req, res, next) => {
         [normalized, req.userId]
       );
       finalVendorId = existing.rows.length > 0 ? existing.rows[0].id : (await db.query('INSERT INTO vendors (name, normalized_name, user_id) VALUES ($1, $2, $3) RETURNING id', [vendor_name, normalized, req.userId])).rows[0].id;
+    }
+
+    // Payment and terms calculation for update
+    let finalDueDate = due_date;
+    if (credit_terms_days !== undefined && !due_date && txn_date) {
+      const termsDays = parseInt(credit_terms_days, 10) || 0;
+      if (termsDays > 0) {
+        const d = new Date(txn_date);
+        d.setDate(d.getDate() + termsDays);
+        finalDueDate = d.toISOString().split('T')[0];
+      }
     }
 
     // GST Calculation for update
@@ -312,13 +355,18 @@ const update = async (req, res, next) => {
            sgst_amount = COALESCE($11, sgst_amount),
            igst_amount = COALESCE($12, igst_amount),
            vendor_gstin = COALESCE($13, vendor_gstin),
-           itc_eligible = COALESCE($14, itc_eligible)
-       WHERE id = $15 AND user_id = $16 AND is_deleted = false RETURNING *`,
+           itc_eligible = COALESCE($14, itc_eligible),
+           payment_status = COALESCE($15, payment_status),
+           due_date = COALESCE($16, due_date),
+           credit_terms_days = COALESCE($17, credit_terms_days),
+           amount_paid = COALESCE($18, amount_paid)
+       WHERE id = $19 AND user_id = $20 AND is_deleted = false RETURNING *`,
       [
         type, amount, category_id, finalVendorId, txn_date, notes,
         gstParams.is_gst_bill, gstParams.gst_rate, gstParams.taxable_amount,
         gstParams.cgst_amount, gstParams.sgst_amount, gstParams.igst_amount,
         gstParams.vendor_gstin, gstParams.itc_eligible,
+        payment_status, finalDueDate, credit_terms_days, amount_paid,
         id, req.userId
       ]
     );
@@ -352,6 +400,11 @@ const update = async (req, res, next) => {
         source: joined.source,
         is_flagged_unusual: joined.is_flagged_unusual,
         created_at: joined.created_at,
+        payment_status: joined.payment_status || 'paid',
+        due_date: joined.due_date,
+        credit_terms_days: joined.credit_terms_days || 0,
+        amount_paid: joined.amount_paid !== null ? joined.amount_paid : joined.amount,
+        payment_date: joined.payment_date,
         gst_details: joined.is_gst_bill ? {
           gst_rate: joined.gst_rate,
           taxable_amount: joined.taxable_amount,

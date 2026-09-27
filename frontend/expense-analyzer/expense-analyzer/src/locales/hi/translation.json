@@ -39,6 +39,7 @@
   "nav": {
     "dashboard": "डैशबोर्ड",
     "expenses": "खर्च सूची",
+    "payables": "देय खाते / उधारी",
     "taxCenter": "जीएसटी एवं टैक्स केंद्र",
     "categories": "श्रेणियां",
     "analysis": "खर्च विश्लेषण",
@@ -63,7 +64,9 @@
     "unusualExpensesTitle": "असामान्य खर्च",
     "unusualExpensesSubtitle": "सामान्य पैटर्न से अलग चिह्नित किए गए लेन-देन",
     "taxCenterTitle": "जीएसटी और टैक्स विश्लेषण",
-    "taxCenterSubtitle": "इनपुट टैक्स क्रेडिट (ITC), चालान ऑडिट और सीए रिपोर्ट"
+    "taxCenterSubtitle": "इनपुट टैक्स क्रेडिट (ITC), चालान ऑडिट और सीए रिपोर्ट",
+    "payablesTitle": "देय खाते और उधारी ट्रैकर (Accounts Payable)",
+    "payablesSubtitle": "उधारी देयता, समय सीमा उल्टी गिनती एवं भुगतान निपटान"
   },
   "dashboard": {
     "monthlyBudgetSummary": "मासिक बजट सारांश — {{month}}",
@@ -108,10 +111,25 @@
     "gstInvoiceLabel": "यह जीएसटी टैक्स इनवॉइस है",
     "gstRateLabel": "जीएसटी दर (%)",
     "vendorGstinLabel": "विक्रेता जीएसटीआईएन",
+    "paymentStatusTitle": "भुगतान स्थिति और क्रेडिट शर्तें (उधारी)",
+    "paymentStatusSubtitle": "निर्दिष्ट करें कि यह बिल नकद में चुकाया गया था या उधारी पर खरीदा गया था।",
+    "creditTermPresets": "क्रेडिट अवधि (दिन)",
+    "dueDateLabel": "भुगतान देय तिथि",
+    "amountPaidLabel": "अब तक चुकाई गई राशि (₹)",
     "errors": {
       "amount": "राशि दर्ज करना आवश्यक है और यह 0 से अधिक होनी चाहिए।",
       "category": "श्रेणी चुनना आवश्यक है।",
       "date": "लेन-देन की तारीख आवश्यक है।"
+    }
+  },
+  "payables": {
+    "pageTitle": "देय खाते और उधारी ट्रैकर (Accounts Payable)",
+    "pageSubtitle": "विक्रेता देयताएं, क्रेडिट अवधि और देय तिथि चेतावनियों की निगरानी करें।",
+    "loadError": "उधारी डेटा लोड करने में विफल। कृपया पुनः प्रयास करें।",
+    "status": {
+      "paid": "पूर्ण भुगतान (Paid)",
+      "pending": "लंबित उधारी (Pending)",
+      "partiallyPaid": "आंशिक भुगतान (Partially Paid)"
     }
   },
   "addExpense": {
