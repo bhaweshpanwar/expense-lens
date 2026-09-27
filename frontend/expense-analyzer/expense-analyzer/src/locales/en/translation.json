@@ -39,6 +39,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "expenses": "Expenses",
+    "taxCenter": "GST & Tax Center",
     "categories": "Categories",
     "analysis": "Expense Analysis",
     "budgetAlerts": "Budget & Alerts",
@@ -60,7 +61,9 @@
     "budgetAlertsTitle": "Budget & Alerts",
     "budgetAlertsSubtitle": "Monthly and category budget monitoring",
     "unusualExpensesTitle": "Unusual Expenses",
-    "unusualExpensesSubtitle": "Transactions flagged outside normal patterns"
+    "unusualExpensesSubtitle": "Transactions flagged outside normal patterns",
+    "taxCenterTitle": "GST & Tax Intelligence",
+    "taxCenterSubtitle": "GSTR-2B reconciliation, Input Tax Credit (ITC) tracking & CA exports"
   },
   "dashboard": {
     "monthlyBudgetSummary": "Monthly Budget Summary — {{month}}",
@@ -102,6 +105,9 @@
     "dateLabel": "Transaction Date",
     "notesLabel": "Notes",
     "notesPlaceholder": "Optional details about this expense",
+    "gstInvoiceLabel": "This is a GST Tax Invoice",
+    "gstRateLabel": "GST Rate (%)",
+    "vendorGstinLabel": "Vendor GSTIN",
     "errors": {
       "amount": "Amount is required and must be greater than 0.",
       "category": "Category is required.",

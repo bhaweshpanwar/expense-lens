@@ -39,6 +39,7 @@
   "nav": {
     "dashboard": "डैशबोर्ड",
     "expenses": "खर्च सूची",
+    "taxCenter": "जीएसटी एवं टैक्स केंद्र",
     "categories": "श्रेणियां",
     "analysis": "खर्च विश्लेषण",
     "budgetAlerts": "बजट और चेतावनियां",
@@ -60,7 +61,9 @@
     "budgetAlertsTitle": "बजट और चेतावनियां",
     "budgetAlertsSubtitle": "मासिक और श्रेणी बजट की निगरानी",
     "unusualExpensesTitle": "असामान्य खर्च",
-    "unusualExpensesSubtitle": "सामान्य पैटर्न से अलग चिह्नित किए गए लेन-देन"
+    "unusualExpensesSubtitle": "सामान्य पैटर्न से अलग चिह्नित किए गए लेन-देन",
+    "taxCenterTitle": "जीएसटी और टैक्स विश्लेषण",
+    "taxCenterSubtitle": "इनपुट टैक्स क्रेडिट (ITC), चालान ऑडिट और सीए रिपोर्ट"
   },
   "dashboard": {
     "monthlyBudgetSummary": "मासिक बजट सारांश — {{month}}",
@@ -102,6 +105,9 @@
     "dateLabel": "लेन-देन की तारीख",
     "notesLabel": "विवरण / टिप्पणी",
     "notesPlaceholder": "इस खर्च के बारे में कोई अतिरिक्त जानकारी",
+    "gstInvoiceLabel": "यह जीएसटी टैक्स इनवॉइस है",
+    "gstRateLabel": "जीएसटी दर (%)",
+    "vendorGstinLabel": "विक्रेता जीएसटीआईएन",
     "errors": {
       "amount": "राशि दर्ज करना आवश्यक है और यह 0 से अधिक होनी चाहिए।",
       "category": "श्रेणी चुनना आवश्यक है।",

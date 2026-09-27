@@ -32,6 +32,9 @@ apiClient.interceptors.response.use(
       // Clear token on authentication failure
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_SESSION_KEY);
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -150,6 +153,12 @@ export async function createExpense(expense) {
     vendor_name: expense.vendor || undefined,
     txn_date: expense.date,
     notes: expense.notes || '',
+    // GST Fields
+    is_gst_bill: expense.is_gst_bill || false,
+    gst_rate: expense.gst_rate,
+    is_tax_inclusive: expense.is_tax_inclusive !== false,
+    is_inter_state: expense.is_inter_state || false,
+    vendor_gstin: expense.vendor_gstin || undefined,
   };
 
   const res = await apiClient.post('/transactions', payload);
@@ -170,6 +179,12 @@ export async function updateExpense(id, updates) {
     vendor_name: updates.vendor || undefined,
     txn_date: updates.date || undefined,
     notes: updates.notes !== undefined ? updates.notes : undefined,
+    // GST Fields
+    is_gst_bill: updates.is_gst_bill,
+    gst_rate: updates.gst_rate,
+    is_tax_inclusive: updates.is_tax_inclusive,
+    is_inter_state: updates.is_inter_state,
+    vendor_gstin: updates.vendor_gstin,
   };
 
   const res = await apiClient.put(`/transactions/${id}`, payload);
@@ -180,6 +195,41 @@ export async function updateExpense(id, updates) {
 export async function deleteExpense(id) {
   await apiClient.delete(`/transactions/${id}`);
   return { success: true, id };
+}
+
+// ---- GST & Tax Intelligence -------------------------------------------------
+
+export async function fetchGstSummary({ from, to } = {}) {
+  try {
+    const res = await apiClient.get('/tax/gst-summary', {
+      params: { from, to }
+    });
+    return res.data?.data;
+  } catch (err) {
+    console.error('Failed to fetch GST summary', err);
+    throw err;
+  }
+}
+
+export async function downloadGstr2bCsv({ from, to } = {}) {
+  try {
+    const res = await apiClient.get('/tax/export-gstr2b', {
+      params: { from, to },
+      responseType: 'blob'
+    });
+
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'ExpenseLens_GSTR2B_Report.csv');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Failed to download GSTR-2B CSV', err);
+    throw err;
+  }
 }
 
 // ---- Reference data ---------------------------------------------------------
@@ -373,7 +423,7 @@ export async function analyzeReceiptImage(file) {
   return {
     vendor: payload?.vendor || '',
     amount: payload?.amount ? Number(payload.amount) : '',
-    date: payload?.date ? formatDate(payload.date) : '',
+    date: payload?.date ? formatDate(payload.date) : new Date().toISOString().split('T')[0],
     category: payload?.category || '',
     raw_text: payload?.raw_text || '',
     fallback: Boolean(res.data?.fallback),
@@ -496,5 +546,3 @@ export async function getSavingsSuggestion(target_monthly_save = 10000) {
   });
   return res.data?.data;
 }
-
-

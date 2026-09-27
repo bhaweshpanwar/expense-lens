@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { ExpenseProvider } from './context/ExpenseContext';
+import GstCenter from './pages/GstCenter';
 
 function resolveMeta(pathname, t) {
   if (pathname === '/') {
@@ -41,6 +42,9 @@ function resolveMeta(pathname, t) {
   }
   if (pathname === '/unusual-expenses') {
     return { title: t('meta.unusualExpensesTitle'), subtitle: t('meta.unusualExpensesSubtitle') };
+  }
+  if (pathname === '/tax') {
+    return { title: t('meta.taxCenterTitle'), subtitle: t('meta.taxCenterSubtitle') };
   }
   return { title: t('appName'), subtitle: '' };
 }
@@ -73,6 +77,7 @@ function AppShell() {
             <Route path="/analysis" element={<ExpenseAnalysis />} />
             <Route path="/budget-alerts" element={<BudgetAlerts />} />
             <Route path="/unusual-expenses" element={<UnusualExpenses />} />
+            <Route path="/tax" element={<ProtectedRoute><GstCenter /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

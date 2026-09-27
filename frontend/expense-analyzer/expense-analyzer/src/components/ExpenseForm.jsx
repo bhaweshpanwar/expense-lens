@@ -3,8 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { categories as defaultCategories } from '../data/categories';
 import { fetchVendors, fetchCategories } from '../services/api';
 import { useExpenses } from '../context/ExpenseContext';
+import { Receipt, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
-const emptyForm = { amount: '', category: '', vendor: '', date: '', notes: '' };
+const emptyForm = {
+  amount: '',
+  category: '',
+  vendor: '',
+  date: '',
+  notes: '',
+  is_gst_bill: false,
+  gst_rate: 18,
+  is_inter_state: false,
+  is_tax_inclusive: true,
+  vendor_gstin: ''
+};
 
 export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitLabel }) {
   const { t } = useTranslation();
@@ -30,15 +42,12 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
 
   const categoryOptions = useMemo(() => {
     const map = new Map();
-    // Use DB categories first
     dbCategories.forEach((c) => {
       if (c.name) map.set(c.name.toLowerCase(), c.name);
     });
-    // Add default category templates if user has few categories
     defaultCategories.forEach((c) => {
       if (!map.has(c.name.toLowerCase())) map.set(c.name.toLowerCase(), c.name);
     });
-    // Add any category from existing expenses or current form
     (expenses || []).forEach((e) => {
       if (e.category) map.set(e.category.toLowerCase(), e.category);
     });
@@ -55,7 +64,8 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
   }, [initialValues]);
 
   const handleChange = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const validate = () => {
@@ -81,10 +91,48 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
 
   const resolvedSubmitLabel = submitLabel || t('common.saveExpense');
 
+  // --- GST Logic ---
+  const gstBreakdown = useMemo(() => {
+    if (!form.is_gst_bill) return null;
+
+    const amount = parseFloat(form.amount) || 0;
+    const rate = parseFloat(form.gst_rate) || 0;
+
+    let taxable, totalTax;
+    if (form.is_tax_inclusive) {
+      taxable = amount / (1 + rate / 100);
+      totalTax = amount - taxable;
+    } else {
+      taxable = amount;
+      totalTax = amount * (rate / 100);
+    }
+
+    const cgst = form.is_inter_state ? 0 : totalTax / 2;
+    const sgst = form.is_inter_state ? 0 : totalTax / 2;
+    const igst = form.is_inter_state ? totalTax : 0;
+
+    const blockedCategories = ['Food & Beverages', 'Personal Care', 'Club Memberships', 'Motor Vehicles (Personal)'];
+    const isBlocked = blockedCategories.some(cat => form.category?.toLowerCase().includes(cat.toLowerCase()));
+
+    return {
+      taxable: taxable.toFixed(2),
+      cgst: cgst.toFixed(2),
+      sgst: sgst.toFixed(2),
+      igst: igst.toFixed(2),
+      total: (taxable + totalTax).toFixed(2),
+      itc_eligible: !isBlocked
+    };
+  }, [form]);
+
+  const isValidGstin = (gstin) => {
+    const regex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    return regex.test(gstin);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
+        <div className="flex flex-col">
           <label className="block text-sm font-medium text-[var(--color-ink)] mb-1.5">
             {t('expenseForm.amountLabel')} <span className="text-[var(--color-bad)]">*</span>
           </label>
@@ -104,7 +152,7 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
           {errors.amount && <p className="text-xs text-[var(--color-bad)] mt-1">{errors.amount}</p>}
         </div>
 
-        <div>
+        <div className="flex flex-col">
           <label className="block text-sm font-medium text-[var(--color-ink)] mb-1.5">
             {t('expenseForm.dateLabel')} <span className="text-[var(--color-bad)]">*</span>
           </label>
@@ -159,6 +207,135 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
         </div>
       </div>
 
+      {/* GST Toggle Section */}
+      <div className="p-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Receipt size={18} className="text-[var(--color-brand)]" />
+            <label className="text-sm font-semibold text-[var(--color-ink)]">
+              {t('expenseForm.gstInvoiceLabel', 'This is a GST Tax Invoice')}
+            </label>
+          </div>
+          <input
+            type="checkbox"
+            className="w-4 h-4 accent-[var(--color-brand)]"
+            checked={form.is_gst_bill}
+            onChange={handleChange('is_gst_bill')}
+          />
+        </div>
+
+        {form.is_gst_bill && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[var(--color-line)]">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">
+                  {t('expenseForm.gstRateLabel', 'GST Rate (%)')}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {[0, 5, 12, 18, 28].map(rate => (
+                    <button
+                      key={rate}
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, gst_rate: rate }))}
+                      className={`px-3 py-1 text-xs rounded border transition-all ${
+                        form.gst_rate === rate
+                        ? 'bg-[var(--color-brand)] text-white border-[var(--color-brand)]'
+                        : 'bg-white text-[var(--color-ink)] border-[var(--color-line)] hover:border-[var(--color-brand)]'
+                      }`}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded bg-[var(--color-paper)] border border-[var(--color-line)]">
+                <span className="text-xs text-[var(--color-ink-soft)]">Inter-State (IGST)</span>
+                <input
+                  type="checkbox"
+                  className="w-3 h-3 accent-[var(--color-brand)]"
+                  checked={form.is_inter_state}
+                  onChange={handleChange('is_inter_state')}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded bg-[var(--color-paper)] border border-[var(--color-line)]">
+                <span className="text-xs text-[var(--color-ink-soft)]">Tax Inclusive</span>
+                <input
+                  type="checkbox"
+                  className="w-3 h-3 accent-[var(--color-brand)]"
+                  checked={form.is_tax_inclusive}
+                  onChange={handleChange('is_tax_inclusive')}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[var(--color-ink-soft)] mb-1">
+                  {t('expenseForm.vendorGstinLabel', 'Vendor GSTIN')}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={form.vendor_gstin}
+                    onChange={(e) => setForm(p => ({ ...p, vendor_gstin: e.target.value.toUpperCase() }))}
+                    placeholder="27AAAAA0000A1Z5"
+                    className="w-full px-3 py-1.5 text-xs rounded border border-[var(--color-line)] bg-white text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--color-brand)]"
+                  />
+                  {form.vendor_gstin && (
+                    <div className={`absolute right-2 top-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 ${
+                      isValidGstin(form.vendor_gstin)
+                      ? 'bg-green-100 text-green-700 border border-green-200'
+                      : 'bg-amber-100 text-amber-700 border border-amber-200'
+                    }`}>
+                      {isValidGstin(form.vendor_gstin) ? <CheckCircle2 size={10} /> : <AlertCircle size={10} />}
+                      {isValidGstin(form.vendor_gstin) ? 'Valid' : 'Invalid Format'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-paper)] p-3 rounded-md border border-[var(--color-line)] space-y-2">
+              <div className="text-xs font-bold text-[var(--color-ink)] uppercase tracking-wider mb-2">Tax Breakdown</div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--color-ink-soft)]">Taxable Value:</span>
+                <span className="font-medium">₹{gstBreakdown?.taxable || '0.00'}</span>
+              </div>
+              {form.is_inter_state ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-[var(--color-ink-soft)]">IGST:</span>
+                  <span className="font-medium">₹{gstBreakdown?.igst || '0.00'}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[var(--color-ink-soft)]">CGST:</span>
+                    <span className="font-medium">₹{gstBreakdown?.cgst || '0.00'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[var(--color-ink-soft)]">SGST:</span>
+                    <span className="font-medium">₹{gstBreakdown?.sgst || '0.00'}</span>
+                  </div>
+                </>
+              )}
+              <div className="pt-2 border-t border-[var(--color-line)] flex justify-between text-sm font-bold">
+                <span>Total Value:</span>
+                <span>₹{gstBreakdown?.total || '0.00'}</span>
+              </div>
+              <div className={`mt-3 p-2 rounded text-xs flex items-center gap-2 ${
+                gstBreakdown?.itc_eligible
+                ? 'bg-green-50 text-green-700 border border-green-100'
+                : 'bg-amber-50 text-amber-700 border border-amber-100'
+              }`}>
+                {gstBreakdown?.itc_eligible ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                <span>{gstBreakdown?.itc_eligible ? 'Eligible for ITC' : 'Blocked ITC Sec 17(5)'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-[var(--color-ink)] mb-1.5">
           {t('expenseForm.notesLabel')}
@@ -192,4 +369,3 @@ export default function ExpenseForm({ initialValues, onSubmit, onCancel, submitL
     </form>
   );
 }
-

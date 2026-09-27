@@ -1,4 +1,5 @@
 const db = require('../db/pool');
+const { calculateGst } = require('../utils/gstCalculator');
 
 const getAll = async (req, res, next) => {
   try {
@@ -9,6 +10,7 @@ const getAll = async (req, res, next) => {
 
     let query = `
       SELECT t.id, t.type, t.amount, t.currency, t.txn_date, t.notes, t.source, t.is_flagged_unusual, t.created_at,
+             t.is_gst_bill, t.gst_rate, t.taxable_amount, t.cgst_amount, t.sgst_amount, t.igst_amount, t.vendor_gstin, t.itc_eligible,
              c.id as category_id, c.name as category_name,
              v.id as vendor_id, v.name as vendor_name
       FROM transactions t
@@ -67,6 +69,15 @@ const getAll = async (req, res, next) => {
       source: row.source,
       is_flagged_unusual: row.is_flagged_unusual,
       created_at: row.created_at,
+      gst_details: row.is_gst_bill ? {
+        gst_rate: row.gst_rate,
+        taxable_amount: row.taxable_amount,
+        cgst_amount: row.cgst_amount,
+        sgst_amount: row.sgst_amount,
+        igst_amount: row.igst_amount,
+        vendor_gstin: row.vendor_gstin,
+        itc_eligible: row.itc_eligible
+      } : null,
       category: row.category_id ? { id: row.category_id, name: row.category_name } : null,
       vendor: row.vendor_id ? { id: row.vendor_id, name: row.vendor_name } : null,
     }));
@@ -85,7 +96,10 @@ const getAll = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { type, amount, category_id, vendor_id, vendor_name, txn_date, notes } = req.body;
+    const {
+      type, amount, category_id, vendor_id, vendor_name, txn_date, notes,
+      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin
+    } = req.body;
 
     // Validations
     if (!type || !amount || !txn_date) {
@@ -125,10 +139,54 @@ const create = async (req, res, next) => {
       }
     }
 
+    // GST Calculation
+    let gstData = {
+      is_gst_bill: false,
+      gst_rate: 0,
+      taxable_amount: null,
+      cgst_amount: 0,
+      sgst_amount: 0,
+      igst_amount: 0,
+      vendor_gstin: null,
+      itc_eligible: true
+    };
+
+    if (is_gst_bill && gst_rate !== undefined) {
+      const categoryName = await db.query('SELECT name FROM categories WHERE id = $1', [category_id])
+        .then(res => res.rows[0]?.name || '');
+
+      const calc = calculateGst({
+        totalAmount: amount,
+        gstRate: gst_rate,
+        isTaxInclusive: is_tax_inclusive !== false,
+        isInterState: is_inter_state === true,
+        categoryName: categoryName
+      });
+
+      gstData = {
+        is_gst_bill: true,
+        gst_rate: gst_rate,
+        taxable_amount: calc.taxable_amount,
+        cgst_amount: calc.cgst_amount,
+        sgst_amount: calc.sgst_amount,
+        igst_amount: calc.igst_amount,
+        vendor_gstin: vendor_gstin || null,
+        itc_eligible: calc.itc_eligible
+      };
+    }
+
     const result = await db.query(
-      `INSERT INTO transactions (type, amount, category_id, vendor_id, txn_date, notes, user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [type, amount, category_id, finalVendorId, txn_date, notes, req.userId]
+      `INSERT INTO transactions (
+        type, amount, category_id, vendor_id, txn_date, notes, user_id,
+        is_gst_bill, gst_rate, taxable_amount, cgst_amount, sgst_amount, igst_amount, vendor_gstin, itc_eligible
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      [
+        type, amount, category_id, finalVendorId, txn_date, notes, req.userId,
+        gstData.is_gst_bill, gstData.gst_rate, gstData.taxable_amount,
+        gstData.cgst_amount, gstData.sgst_amount, gstData.igst_amount,
+        gstData.vendor_gstin, gstData.itc_eligible
+      ]
     );
 
     // Re-fetch with joins to return full object as per API.md
@@ -154,6 +212,15 @@ const create = async (req, res, next) => {
         source: row.source,
         is_flagged_unusual: row.is_flagged_unusual,
         created_at: row.created_at,
+        gst_details: row.is_gst_bill ? {
+          gst_rate: row.gst_rate,
+          taxable_amount: row.taxable_amount,
+          cgst_amount: row.cgst_amount,
+          sgst_amount: row.sgst_amount,
+          igst_amount: row.igst_amount,
+          vendor_gstin: row.vendor_gstin,
+          itc_eligible: row.itc_eligible
+        } : null,
         category: row.category_id ? { id: row.category_id, name: row.category_name } : null,
         vendor: row.vendor_id ? { id: row.vendor_id, name: row.vendor_name } : null,
       }
@@ -166,11 +233,13 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { type, amount, category_id, vendor_id, vendor_name, txn_date, notes } = req.body;
+    const {
+      type, amount, category_id, vendor_id, vendor_name, txn_date, notes,
+      is_gst_bill, gst_rate, is_tax_inclusive, is_inter_state, vendor_gstin
+    } = req.body;
 
     // Validation for updates
     if (type === 'expense' && !category_id && !req.body.hasOwnProperty('category_id')) {
-      // We need to check if the existing txn is an expense
       const existing = await db.query('SELECT type FROM transactions WHERE id = $1 AND user_id = $2', [id, req.userId]);
       if (existing.rows.length === 0) {
         const err = new Error('Transaction not found');
@@ -178,8 +247,7 @@ const update = async (req, res, next) => {
         throw err;
       }
       if (existing.rows[0].type === 'expense') {
-        // If it's an expense, and we are potentially changing type or it's already expense,
-        // we must ensure category_id isn't being cleared or is present if type is set to expense.
+        // Handled by logic if we are not changing the type
       }
     }
 
@@ -199,6 +267,36 @@ const update = async (req, res, next) => {
       finalVendorId = existing.rows.length > 0 ? existing.rows[0].id : (await db.query('INSERT INTO vendors (name, normalized_name, user_id) VALUES ($1, $2, $3) RETURNING id', [vendor_name, normalized, req.userId])).rows[0].id;
     }
 
+    // GST Calculation for update
+    let gstParams = {};
+    if (is_gst_bill !== undefined) {
+      const currentTxn = await db.query('SELECT amount, category_id FROM transactions WHERE id = $1', [id]);
+      const currentAmount = amount || currentTxn.rows[0]?.amount;
+      const currentCatId = category_id || currentTxn.rows[0]?.category_id;
+
+      const categoryName = await db.query('SELECT name FROM categories WHERE id = $1', [currentCatId])
+        .then(res => res.rows[0]?.name || '');
+
+      const calc = calculateGst({
+        totalAmount: currentAmount,
+        gstRate: gst_rate || 0,
+        isTaxInclusive: is_tax_inclusive !== false,
+        isInterState: is_inter_state === true,
+        categoryName: categoryName
+      });
+
+      gstParams = {
+        is_gst_bill,
+        gst_rate: gst_rate || 0,
+        taxable_amount: calc.taxable_amount,
+        cgst_amount: calc.cgst_amount,
+        sgst_amount: calc.sgst_amount,
+        igst_amount: calc.igst_amount,
+        vendor_gstin: vendor_gstin,
+        itc_eligible: calc.itc_eligible
+      };
+    }
+
     const result = await db.query(
       `UPDATE transactions
        SET type = COALESCE($1, type),
@@ -206,9 +304,23 @@ const update = async (req, res, next) => {
            category_id = COALESCE($3, category_id),
            vendor_id = COALESCE($4, vendor_id),
            txn_date = COALESCE($5, txn_date),
-           notes = COALESCE($6, notes)
-       WHERE id = $7 AND user_id = $8 AND is_deleted = false RETURNING *`,
-      [type, amount, category_id, finalVendorId, txn_date, notes, id, req.userId]
+           notes = COALESCE($6, notes),
+           is_gst_bill = COALESCE($7, is_gst_bill),
+           gst_rate = COALESCE($8, gst_rate),
+           taxable_amount = COALESCE($9, taxable_amount),
+           cgst_amount = COALESCE($10, cgst_amount),
+           sgst_amount = COALESCE($11, sgst_amount),
+           igst_amount = COALESCE($12, igst_amount),
+           vendor_gstin = COALESCE($13, vendor_gstin),
+           itc_eligible = COALESCE($14, itc_eligible)
+       WHERE id = $15 AND user_id = $16 AND is_deleted = false RETURNING *`,
+      [
+        type, amount, category_id, finalVendorId, txn_date, notes,
+        gstParams.is_gst_bill, gstParams.gst_rate, gstParams.taxable_amount,
+        gstParams.cgst_amount, gstParams.sgst_amount, gstParams.igst_amount,
+        gstParams.vendor_gstin, gstParams.itc_eligible,
+        id, req.userId
+      ]
     );
 
     if (result.rowCount === 0) {
@@ -218,7 +330,6 @@ const update = async (req, res, next) => {
     }
 
     const row = result.rows[0];
-    // Fetch joins for the final response
     const fullTxn = await db.query(
       `SELECT t.*, c.name as category_name, v.name as vendor_name
        FROM transactions t
@@ -241,6 +352,15 @@ const update = async (req, res, next) => {
         source: joined.source,
         is_flagged_unusual: joined.is_flagged_unusual,
         created_at: joined.created_at,
+        gst_details: joined.is_gst_bill ? {
+          gst_rate: joined.gst_rate,
+          taxable_amount: joined.taxable_amount,
+          cgst_amount: joined.cgst_amount,
+          sgst_amount: joined.sgst_amount,
+          igst_amount: joined.igst_amount,
+          vendor_gstin: joined.vendor_gstin,
+          itc_eligible: joined.itc_eligible
+        } : null,
         category: joined.category_id ? { id: joined.category_id, name: joined.category_name } : null,
         vendor: joined.vendor_id ? { id: joined.vendor_id, name: joined.vendor_name } : null,
       }

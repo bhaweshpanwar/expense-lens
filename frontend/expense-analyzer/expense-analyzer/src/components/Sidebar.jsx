@@ -7,11 +7,13 @@ import {
   LineChart,
   ShieldAlert,
   Sparkles,
+  Landmark,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', labelKey: 'nav.dashboard', icon: LayoutGrid, end: true },
   { to: '/expenses', labelKey: 'nav.expenses', icon: Receipt },
+  { to: '/tax', labelKey: 'nav.taxCenter', icon: Landmark },
   { to: '/categories', labelKey: 'nav.categories', icon: FolderKanban },
   { to: '/analysis', labelKey: 'nav.analysis', icon: LineChart },
   { to: '/budget-alerts', labelKey: 'nav.budgetAlerts', icon: ShieldAlert },
@@ -54,4 +56,3 @@ export default function Sidebar({ isOpen, onNavigate }) {
     </aside>
   );
 }
-
