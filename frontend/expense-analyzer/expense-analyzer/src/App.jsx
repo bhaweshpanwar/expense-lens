@@ -13,11 +13,12 @@ import UnusualExpenses from './pages/UnusualExpenses';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { useTranslation } from 'react-i18next';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
 import { ExpenseProvider } from './context/ExpenseContext';
 import GstCenter from './pages/GstCenter';
 import AccountsPayable from './pages/AccountsPayable';
+import LandingPage from './pages/LandingPage';
 
 function resolveMeta(pathname, t) {
   if (pathname === '/') {
@@ -91,12 +92,38 @@ function AppShell() {
   );
 }
 
+function HomeRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-paper)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-brand)]"></div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <ExpenseProvider>
+        <AppShell />
+      </ExpenseProvider>
+    );
+  }
+
+  return <LandingPage />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public authentication routes outside sidebar/header layout */}
+          {/* Public product landing page */}
+          <Route path="/welcome" element={<LandingPage />} />
+          <Route path="/landing" element={<LandingPage />} />
+
+          {/* Public authentication routes */}
           <Route
             path="/login"
             element={
@@ -113,6 +140,9 @@ export default function App() {
               </PublicOnlyRoute>
             }
           />
+
+          {/* Root route: Landing Page if guest, AppShell if logged in */}
+          <Route path="/" element={<HomeRoute />} />
 
           {/* Protected application routes */}
           <Route

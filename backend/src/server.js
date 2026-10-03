@@ -15,8 +15,8 @@ async function startServer() {
     // Start background anomaly detection CRON
     startAnomalyCron();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     });
   } catch (err) {
     console.error('❌ Failed to connect to database:', err.message);
